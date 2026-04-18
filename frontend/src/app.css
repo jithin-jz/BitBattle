@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --kid-pink: #FFB7D5;
+  --kid-blue: #A3D9FF;
+  --kid-yellow: #FFF4A3;
+  --kid-green: #B7FFD5;
+  --kid-purple: #D5B7FF;
+  --kid-orange: #FFD0A3;
+  --paper-white: #FFFFFF;
+  --paper-bg: #F8F9FF;
+}
+
+@layer base {
+  body {
+    @apply text-slate-800 font-['Outfit',sans-serif] selection:bg-kid-pink selection:text-white;
+    background-color: #f0f4ff;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(255, 183, 213, 0.4) 0, transparent 50%), 
+      radial-gradient(at 50% 0%, rgba(163, 217, 255, 0.4) 0, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(214, 183, 255, 0.4) 0, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body::before, body::after {
+    content: "";
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    filter: blur(100px);
+    z-index: -1;
+    opacity: 0.4;
+    animation: float-bg 25s infinite alternate;
+  }
+
+  body::before {
+    background: #FFB7D5;
+    top: -10%;
+    left: -10%;
+  }
+
+  body::after {
+    background: #A3D9FF;
+    bottom: -10%;
+    right: -10%;
+    animation-delay: -12s;
+  }
+
+  @keyframes float-bg {
+    0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+    100% { transform: translate(150px, 150px) rotate(15deg) scale(1.1); }
+  }
+
+  h1 { @apply text-4xl font-extrabold tracking-tight; }
+  h2 { @apply text-3xl font-bold; }
+  h3 { @apply text-2xl font-bold; }
+}
+
+@layer components {
+  .bubbly-card {
+    @apply bg-white/80 backdrop-blur-sm rounded-bubble shadow-bubble border-4 border-white p-6 transition-all duration-300;
+  }
+  
+  .bubbly-card:hover {
+    @apply shadow-bubble-hover transform -translate-y-1;
+  }
+
+  .btn-kid {
+    @apply px-8 py-3 rounded-full font-bold text-lg shadow-bubble transition-all duration-200 active:translate-y-1 active:shadow-none;
+  }
+
+  .btn-pink { @apply bg-kid-pink text-white hover:bg-[#FF9BBF] border-b-4 border-[#E08BAB]; }
+  .btn-blue { @apply bg-kid-blue text-white hover:bg-[#86C9FF] border-b-4 border-[#76A8DA]; }
+  .btn-yellow { @apply bg-kid-yellow text-slate-700 hover:bg-[#FFE866] border-b-4 border-[#D9C455]; }
+  
+  .badge-kid {
+    @apply px-4 py-1.5 rounded-full font-extrabold text-sm uppercase tracking-wider;
+  }
+}
+
+/* Animations */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.float-anim {
+  animation: float 4s ease-in-out infinite;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
