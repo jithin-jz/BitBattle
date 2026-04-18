@@ -1,59 +1,81 @@
 <script>
-    import '../app.css';
-    import { user, isAuthenticated, fetchMe, logout } from '../stores/auth.js';
-    import { onMount } from 'svelte';
-    import { goto } from '$app/navigation';
-    import { page } from '$app/stores';
+    import { page } from "$app/stores";
+    import { user, isAuthenticated, logout } from "../stores/auth.js";
+    import "../app.css";
 
-    onMount(async () => {
-        await fetchMe();
-    });
+    export let data;
+    export let params;
 
-    async function handleLogout() {
-        await logout();
-        goto('/login');
-    }
-
+    let currentPath = "";
     $: currentPath = $page.url.pathname;
+
+    function handleLogout() {
+        logout();
+    }
 </script>
 
-{#if $isAuthenticated}
-<nav class="bg-paper-white border-b-4 border-kid-blue/20 px-6 py-4 mb-8">
-    <div class="max-w-7xl mx-auto flex items-center justify-between">
-        <a href="/lobby" class="flex items-center gap-3 no-underline group">
-            <div class="bg-kid-pink p-2 rounded-bubble-sm text-2xl group-hover:rotate-12 transition-transform shadow-bubble">⚔️</div>
-            <span class="text-2xl font-[800] text-slate-800 tracking-tight">Arena<span class="text-kid-pink">.</span></span>
-        </a>
+<div class="min-h-screen bg-lc-bg text-lc-text-primary flex flex-col font-sans">
+    {#if $isAuthenticated}
+        <header class="h-14 border-b border-lc-border bg-lc-surface sticky top-0 z-50 px-4">
+            <div class="mx-auto flex h-full max-w-[1600px] items-center justify-between">
+                <div class="flex items-center gap-8">
+                    <a href="/lobby" class="flex items-center gap-2">
+                        <div class="w-2 h-8 bg-lc-orange rounded-full"></div>
+                        <span class="text-xl font-bold tracking-tight">CodeBattle</span>
+                    </a>
 
-        <div class="hidden md:flex items-center gap-2">
-            <a href="/lobby" 
-               class="px-5 py-2 rounded-full font-bold transition-all {currentPath === '/lobby' ? 'bg-kid-blue text-white shadow-bubble' : 'text-slate-500 hover:bg-slate-50'}">
-                Lobby
-            </a>
-            <a href="/leaderboard" 
-               class="px-5 py-2 rounded-full font-bold transition-all {currentPath === '/leaderboard' ? 'bg-kid-purple text-white shadow-bubble' : 'text-slate-500 hover:bg-slate-50'}">
-                Leaderboard
-            </a>
-        </div>
+                    <nav class="hidden md:flex items-center gap-1">
+                        <a
+                            href="/lobby"
+                            class="px-4 py-2 text-sm font-medium transition-colors hover:text-lc-orange {currentPath === '/lobby' ? 'text-lc-orange' : 'text-lc-text-secondary'}"
+                        >
+                            Arena
+                        </a>
+                        <a
+                            href="/leaderboard"
+                            class="px-4 py-2 text-sm font-medium transition-colors hover:text-lc-orange {currentPath === '/leaderboard' ? 'text-lc-orange' : 'text-lc-text-secondary'}"
+                        >
+                            Leaderboard
+                        </a>
+                    </nav>
+                </div>
 
-        <div class="flex items-center gap-4">
-            <div class="hidden sm:flex items-center gap-2 bg-kid-yellow/30 px-4 py-2 rounded-full border-2 border-kid-yellow/50">
-                <span class="text-lg">⭐</span>
-                <span class="font-bold text-slate-700">{$user?.rating || 1200}</span>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 px-3 py-1 bg-lc-surface-elevated rounded-full border border-lc-border">
+                        <span class="text-[10px] font-bold text-lc-orange uppercase">ELO</span>
+                        <span class="text-sm font-bold">{$user?.rating || 1200}</span>
+                    </div>
+
+                    <div class="h-8 w-[1px] bg-lc-border mx-2"></div>
+
+                    <div class="flex items-center gap-3">
+                        <div class="text-right hidden sm:block">
+                            <div class="text-xs font-bold leading-none">{$user?.username || 'Guest'}</div>
+                        </div>
+                        <button
+                            on:click={handleLogout}
+                            class="text-xs font-medium text-lc-text-muted hover:text-lc-orange transition-colors"
+                        >
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
             </div>
-            
-            <div class="flex items-center gap-4">
-                <span class="font-bold text-slate-600 hidden lg:inline">{$user?.username || 'Player'}</span>
-                <button class="px-4 py-1.5 rounded-full border-2 border-slate-200 text-slate-400 font-bold hover:bg-slate-50 text-sm transition-all" on:click={handleLogout}>
-                    Logout
-                </button>
+        </header>
+    {/if}
+
+    <main class="flex-grow flex flex-col">
+        <slot />
+    </main>
+
+    <footer class="border-t border-lc-border bg-lc-surface/50 py-6 px-4">
+        <div class="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-lc-text-muted">
+            <p>© 2026 CodeBattle Arena. All rights reserved.</p>
+            <div class="flex items-center gap-6">
+                <a href="#" class="hover:text-lc-text-secondary transition-colors">Privacy Policy</a>
+                <a href="#" class="hover:text-lc-text-secondary transition-colors">Terms of Service</a>
+                <a href="#" class="hover:text-lc-text-secondary transition-colors">Documentation</a>
             </div>
         </div>
-    </div>
-</nav>
-{/if}
-
-<main class="pb-20">
-    <slot />
-</main>
-
+    </footer>
+</div>

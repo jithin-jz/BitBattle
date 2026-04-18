@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.core.security import decode_token
 from app.core.database import async_session_factory
@@ -43,7 +44,6 @@ class LobbyManager:
         })
 
     async def broadcast(self, message: dict):
-
         """Broadcast message to everyone in the lobby."""
         disconnected = []
         for ws in self.active_connections:
@@ -53,7 +53,7 @@ class LobbyManager:
                 disconnected.append(ws)
 
         for ws in disconnected:
-            self.disconnect(ws)
+            await self.disconnect(ws)
 
 
 class ConnectionManager:
@@ -73,17 +73,26 @@ class ConnectionManager:
         self.active_connections[match_id][user_id] = websocket
         logger.info(f"WS connected: user={user_id}, match={match_id}")
 
-    def disconnect(self, match_id: str, user_id: str):
+    def disconnect(self, match_id: str, user_id: str, websocket: WebSocket = None) -> bool:
         if match_id in self.active_connections:
+            current_ws = self.active_connections[match_id].get(user_id)
+            if current_ws is None:
+                return False
+            if websocket is not None and current_ws is not websocket:
+                return False
+
             self.active_connections[match_id].pop(user_id, None)
             if not self.active_connections[match_id]:
                 del self.active_connections[match_id]
+            return True
+
+        return False
 
     async def send_to_match(self, match_id: str, message: dict):
         """Broadcast message to all connections in a match."""
         connections = self.active_connections.get(match_id, {})
         disconnected = []
-        for user_id, ws in connections.items():
+        for user_id, ws in list(connections.items()):
             try:
                 await ws.send_json(message)
             except Exception:
@@ -115,6 +124,51 @@ class ConnectionManager:
 manager = ConnectionManager()
 lobby_manager = LobbyManager()
 
+
+
+async def load_match_start_payload(db: AsyncSession, match_id: str) -> dict:
+    """Load the full payload needed to start or restore a match session."""
+    result = await db.execute(
+        select(Match)
+        .options(joinedload(Match.player1), joinedload(Match.player2))
+        .where(Match.id == match_id)
+    )
+    match = result.scalar_one()
+
+    problem_result = await db.execute(select(Problem).where(Problem.id == match.problem_id))
+    problem = problem_result.scalar_one()
+
+    test_case_result = await db.execute(
+        select(TestCase).where(TestCase.problem_id == problem.id)
+    )
+    test_cases = test_case_result.scalars().all()
+
+    return {
+        "type": "match_start",
+        "match_id": match_id,
+        "player1_id": match.player1_id,
+        "player2_id": match.player2_id,
+        "player1_username": match.player1_username,
+        "player2_username": match.player2_username,
+        "player1_avatar": match.player1_avatar,
+        "player2_avatar": match.player2_avatar,
+        "problem": {
+            "id": problem.id,
+            "title": problem.title,
+            "description": problem.description,
+            "difficulty": problem.difficulty,
+            "time_limit": problem.time_limit,
+        },
+        "test_cases": [
+            {
+                "id": tc.id,
+                "input": tc.input,
+                "expected_output": tc.expected_output,
+                "is_hidden": tc.is_hidden,
+            }
+            for tc in test_cases
+        ],
+    }
 
 
 async def run_match_timer(match_id: str, time_limit: int):
@@ -169,9 +223,9 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
         if user_id not in (match.player1_id, match.player2_id):
             await websocket.close(code=4003, reason="Not part of this match")
             return
-
-    # Check if match is already started
-    match_is_already_started = match.status == "STARTED"
+        player1_id = match.player1_id
+        player2_id = match.player2_id
+        match_is_already_started = match.status == "STARTED"
 
     # Connect
     await manager.connect(match_id, user_id, websocket)
@@ -194,6 +248,7 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
             logger.error(f"Redis listener error: {e}")
         finally:
             await pubsub.unsubscribe(f"match:{match_id}")
+            await pubsub.close()
 
     redis_task = asyncio.create_task(redis_listener())
 
@@ -201,32 +256,9 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
         # If match is already started, send current state immediately
         if match_is_already_started:
             async with async_session_factory() as db_session:
-                result = await db_session.execute(select(Problem).where(Problem.id == match.problem_id))
-                problem = result.scalar_one()
-                tc_result = await db_session.execute(select(TestCase).where(TestCase.problem_id == problem.id))
-                test_cases = tc_result.scalars().all()
-                
-                await websocket.send_json({
-                    "type": "match_start",
-                    "match_id": match_id,
-                    "player1_id": match.player1_id,
-                    "player2_id": match.player2_id,
-                    "player1_username": match.player1_username,
-                    "player2_username": match.player2_username,
-                    "player1_avatar": match.player1_avatar,
-                    "player2_avatar": match.player2_avatar,
-                    "problem": {
-                        "id": problem.id,
-                        "title": problem.title,
-                        "description": problem.description,
-                        "difficulty": problem.difficulty,
-                        "time_limit": problem.time_limit,
-                    },
-                    "test_cases": [
-                        {"id": tc.id, "input": tc.input, "expected_output": tc.expected_output, "is_hidden": tc.is_hidden}
-                        for tc in test_cases
-                    ],
-                })
+                await websocket.send_json(
+                    await load_match_start_payload(db_session, match_id)
+                )
 
         # Notify match about new connection
         await manager.send_to_match(match_id, {
@@ -238,39 +270,16 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
         # Auto-start logic
         if manager.get_connected_count(match_id) == 2 and not match_is_already_started:
             async with async_session_factory() as db:
-                match = await MatchService.start_match(db, match_id)
+                await MatchService.start_match(db, match_id)
                 await db.commit()
-                # Broadcast start event
-                result = await db.execute(select(Problem).where(Problem.id == match.problem_id))
-                problem = result.scalar_one()
-                tc_result = await db.execute(select(TestCase).where(TestCase.problem_id == problem.id))
-                test_cases = tc_result.scalars().all()
-
-                await manager.send_to_match(match_id, {
-                    "type": "match_start",
-                    "match_id": match_id,
-                    "player1_id": match.player1_id,
-                    "player2_id": match.player2_id,
-                    "player1_username": match.player1_username,
-                    "player2_username": match.player2_username,
-                    "player1_avatar": match.player1_avatar,
-                    "player2_avatar": match.player2_avatar,
-                    "problem": {
-                        "id": problem.id,
-                        "title": problem.title,
-                        "description": problem.description,
-                        "difficulty": problem.difficulty,
-                        "time_limit": problem.time_limit,
-                    },
-                    "test_cases": [
-                        {"id": tc.id, "input": tc.input, "expected_output": tc.expected_output, "is_hidden": tc.is_hidden}
-                        for tc in test_cases
-                    ],
-                })
+                start_payload = await load_match_start_payload(db, match_id)
+                await manager.send_to_match(match_id, start_payload)
 
                 # Start timer
                 if match_id not in manager.match_timers:
-                    manager.match_timers[match_id] = asyncio.create_task(run_match_timer(match_id, problem.time_limit))
+                    manager.match_timers[match_id] = asyncio.create_task(
+                        run_match_timer(match_id, start_payload["problem"]["time_limit"])
+                    )
 
         # Main message loop
         while True:
@@ -285,7 +294,7 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
                 })
             elif msg_type == "code_update":
                 # Find opponent
-                opponent_id = match.player2_id if user_id == match.player1_id else match.player1_id
+                opponent_id = player2_id if user_id == player1_id else player1_id
                 await manager.send_to_user(match_id, opponent_id, {
                     "type": "opponent_typing",
                     "user_id": user_id,
@@ -297,11 +306,12 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
         logger.error(f"WS error: {e}")
     finally:
         redis_task.cancel()
-        manager.disconnect(match_id, user_id)
-        await manager.send_to_match(match_id, {
-            "type": "player_disconnected",
-            "user_id": user_id,
-        })
+        removed = manager.disconnect(match_id, user_id, websocket)
+        if removed:
+            await manager.send_to_match(match_id, {
+                "type": "player_disconnected",
+                "user_id": user_id,
+            })
 
 
 async def handle_lobby_websocket(websocket: WebSocket, token: str = None):
@@ -360,7 +370,3 @@ async def handle_lobby_websocket(websocket: WebSocket, token: str = None):
     finally:
         await lobby_manager.disconnect(websocket)
         redis_task.cancel()
-
-
-
-

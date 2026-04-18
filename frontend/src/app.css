@@ -1,102 +1,104 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+@import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@theme {
+  /* LeetCode-inspired Pro Palette */
+  --color-lc-orange: #ffa116;
+  --color-lc-orange-hover: #ffb84d;
+  
+  --color-lc-bg: #0a0a0a;
+  --color-lc-surface: #1a1a1a;
+  --color-lc-surface-elevated: #262626;
+  
+  --color-lc-border: #333333;
+  --color-lc-border-hover: #444444;
+  
+  --color-lc-text-primary: #eff1f6;
+  --color-lc-text-secondary: #9da3af;
+  --color-lc-text-muted: #626a76;
 
-:root {
-  --kid-pink: #FFB7D5;
-  --kid-blue: #A3D9FF;
-  --kid-yellow: #FFF4A3;
-  --kid-green: #B7FFD5;
-  --kid-purple: #D5B7FF;
-  --kid-orange: #FFD0A3;
-  --paper-white: #FFFFFF;
-  --paper-bg: #F8F9FF;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Fira Code", monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 }
 
 @layer base {
+  html {
+    background-color: var(--color-lc-bg);
+    color: var(--color-lc-text-primary);
+    font-family: var(--font-sans);
+  }
+
   body {
-    @apply text-slate-800 font-['Outfit',sans-serif] selection:bg-kid-pink selection:text-white;
-    background-color: #f0f4ff;
-    background-image: 
-      radial-gradient(at 0% 0%, rgba(255, 183, 213, 0.4) 0, transparent 50%), 
-      radial-gradient(at 50% 0%, rgba(163, 217, 255, 0.4) 0, transparent 50%),
-      radial-gradient(at 100% 0%, rgba(214, 183, 255, 0.4) 0, transparent 50%);
-    background-attachment: fixed;
+    margin: 0;
     min-height: 100vh;
-    position: relative;
-    overflow-x: hidden;
   }
 
-  body::before, body::after {
-    content: "";
-    position: fixed;
-    width: 600px;
-    height: 600px;
-    border-radius: 50%;
-    filter: blur(100px);
-    z-index: -1;
-    opacity: 0.4;
-    animation: float-bg 25s infinite alternate;
+  * {
+    box-sizing: border-box;
+    border-color: var(--color-lc-border);
   }
 
-  body::before {
-    background: #FFB7D5;
-    top: -10%;
-    left: -10%;
+  ::selection {
+    background: var(--color-lc-orange);
+    color: #000;
   }
 
-  body::after {
-    background: #A3D9FF;
-    bottom: -10%;
-    right: -10%;
-    animation-delay: -12s;
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
   }
-
-  @keyframes float-bg {
-    0% { transform: translate(0, 0) rotate(0deg) scale(1); }
-    100% { transform: translate(150px, 150px) rotate(15deg) scale(1.1); }
-  }
-
-  h1 { @apply text-4xl font-extrabold tracking-tight; }
-  h2 { @apply text-3xl font-bold; }
-  h3 { @apply text-2xl font-bold; }
-}
-
-@layer components {
-  .bubbly-card {
-    @apply bg-white/80 backdrop-blur-sm rounded-bubble shadow-bubble border-4 border-white p-6 transition-all duration-300;
-  }
-  
-  .bubbly-card:hover {
-    @apply shadow-bubble-hover transform -translate-y-1;
-  }
-
-  .btn-kid {
-    @apply px-8 py-3 rounded-full font-bold text-lg shadow-bubble transition-all duration-200 active:translate-y-1 active:shadow-none;
-  }
-
-  .btn-pink { @apply bg-kid-pink text-white hover:bg-[#FF9BBF] border-b-4 border-[#E08BAB]; }
-  .btn-blue { @apply bg-kid-blue text-white hover:bg-[#86C9FF] border-b-4 border-[#76A8DA]; }
-  .btn-yellow { @apply bg-kid-yellow text-slate-700 hover:bg-[#FFE866] border-b-4 border-[#D9C455]; }
-  
-  .badge-kid {
-    @apply px-4 py-1.5 rounded-full font-extrabold text-sm uppercase tracking-wider;
+  ::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 10px;
   }
 }
 
-/* Animations */
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
+@utility lc-card {
+  background-color: var(--color-lc-surface);
+  border: 1px solid var(--color-lc-border);
+  border-radius: var(--radius-md);
 }
 
-.float-anim {
-  animation: float 4s ease-in-out infinite;
+@utility lc-button-primary {
+  background-color: var(--color-lc-orange);
+  color: #000;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  &:hover {
+    background-color: var(--color-lc-orange-hover);
+  }
+  &:disabled {
+    opacity: 0.5;
+  }
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+@utility lc-button-secondary {
+  background-color: var(--color-lc-surface-elevated);
+  color: var(--color-lc-text-primary);
+  border: 1px solid var(--color-lc-border);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+}
+
+@utility lc-input {
+  background-color: var(--color-lc-surface);
+  border: 1px solid var(--color-lc-border);
+  color: var(--color-lc-text-primary);
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-sm);
+  outline: none;
+  width: 100%;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
 }

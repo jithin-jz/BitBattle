@@ -1,4 +1,5 @@
 from typing import List
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select
@@ -21,6 +22,7 @@ from app.services.matchmaking_service import MatchmakingService
 from app.services.match_service import MatchService
 
 router = APIRouter(tags=["Match"])
+STALE_WAITING_MATCH_TTL = timedelta(minutes=2)
 
 
 @router.post("/match/join", response_model=dict)
@@ -42,12 +44,23 @@ async def join_match(
     active_match = active_match_query.scalar_one_or_none()
     
     if active_match:
-        opponent_id = active_match.player2_id if active_match.player1_id == user_id else active_match.player1_id
-        return {
-            "status": "matched",
-            "match_id": active_match.id,
-            "opponent_id": opponent_id,
-        }
+        is_stale_waiting_match = (
+            active_match.status == "WAITING"
+            and active_match.created_at is not None
+            and datetime.now(timezone.utc) - active_match.created_at >= STALE_WAITING_MATCH_TTL
+        )
+
+        if is_stale_waiting_match:
+            active_match.status = "FINISHED"
+            active_match.ended_at = datetime.now(timezone.utc)
+            await db.commit()
+        else:
+            opponent_id = active_match.player2_id if active_match.player1_id == user_id else active_match.player1_id
+            return {
+                "status": "matched",
+                "match_id": active_match.id,
+                "opponent_id": opponent_id,
+            }
 
     # Get user
     result = await db.execute(select(User).where(User.id == user_id))
@@ -70,6 +83,8 @@ async def join_match(
     if opponent_id:
         # Match found! Create match record
         match = await service.create_match(db, user_id, opponent_id)
+
+        await db.commit()
 
         # Publish match found event via Redis pub/sub
         import json

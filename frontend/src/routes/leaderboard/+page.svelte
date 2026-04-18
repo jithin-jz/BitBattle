@@ -1,197 +1,144 @@
 <script>
-    import { onMount } from 'svelte';
-    import { goto } from '$app/navigation';
-    import { isAuthenticated, api } from '../../stores/auth.js';
-    import { connectToLobby } from '../../stores/lobby.js';
+    import { onMount, onDestroy } from "svelte";
+    import { goto } from "$app/navigation";
+    import { isAuthenticated, api } from "../../stores/auth.js";
+
+    export let data;
+    export let params;
 
     let players = [];
     let loading = true;
 
     onMount(async () => {
         if (!$isAuthenticated) {
-            goto('/login');
+            goto("/login");
             return;
         }
         await loadLeaderboard();
-        
-        // Connect to real-time updates
-        connectToLobby(() => {
-            loadLeaderboard();
-        });
     });
 
     async function loadLeaderboard() {
-        if (players.length === 0) loading = true;
+        loading = true;
         try {
-            const res = await api('/leaderboard?limit=50');
+            const res = await api("/lobby/leaderboard");
             if (res.ok) {
                 players = await res.json();
             }
         } catch (e) {
-            console.error('Failed to load leaderboard:', e);
+            console.error("Failed to fetch leaderboard:", e);
+        } finally {
+            loading = false;
         }
-        loading = false;
-    }
-
-    function getRankEmoji(index) {
-        if (index === 0) return '🥇';
-        if (index === 1) return '🥈';
-        if (index === 2) return '🥉';
-        return index + 1;
-    }
-
-    function getTierStyles(rating) {
-        if (rating >= 2000) return 'bg-rose-100 text-rose-600 border-rose-200';
-        if (rating >= 1600) return 'bg-amber-100 text-amber-600 border-amber-200';
-        if (rating >= 1400) return 'bg-indigo-100 text-indigo-600 border-indigo-200';
-        if (rating >= 1200) return 'bg-sky-100 text-sky-600 border-sky-200';
-        return 'bg-slate-100 text-slate-500 border-slate-200';
-    }
-
-    function getTierName(rating) {
-        if (rating >= 2000) return 'Godlike';
-        if (rating >= 1600) return 'Master';
-        if (rating >= 1400) return 'Expert';
-        if (rating >= 1200) return 'Warrior';
-        return 'Rookie';
     }
 </script>
 
 <svelte:head>
-    <title>Wall of Fame — Coding Arena</title>
+    <title>Global Rankings - CodeBattle</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-6 pb-20">
-    <div class="text-center mb-16">
-        <div class="inline-block bg-kid-pink/20 text-kid-pink px-6 py-2 rounded-full font-black text-sm uppercase tracking-widest mb-4">
-            Season 1 Rankings
+<div class="mx-auto w-full max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
+    <div class="mb-10 flex flex-col sm:flex-row sm:items-end justify-between gap-6 fade-in">
+        <div>
+            <h1 class="text-3xl font-bold tracking-tight text-lc-text-primary">Hall of Fame</h1>
+            <p class="mt-2 text-sm text-lc-text-secondary">The elite architects of the digital arena.</p>
         </div>
-        <h1 class="text-6xl font-[800] text-slate-800 tracking-tighter mb-4">
-            Wall of <span class="text-kid-purple">Fame</span> 🏆
-        </h1>
-        <p class="text-xl text-slate-500 font-medium">The greatest coding ninjas in the arena!</p>
+        
+        <div class="flex items-center gap-4">
+            <div class="lc-card px-4 py-2 flex items-center gap-3">
+                <span class="text-[10px] font-bold text-lc-text-muted uppercase tracking-widest">Season 4</span>
+                <span class="h-1 w-1 rounded-full bg-lc-orange"></span>
+                <span class="text-xs font-bold text-lc-text-primary">Active</span>
+            </div>
+        </div>
     </div>
 
-    {#if loading}
-        <div class="flex flex-col items-center justify-center py-20">
-            <div class="w-16 h-16 border-8 border-kid-blue/20 border-t-kid-blue rounded-full animate-spin mb-4"></div>
-            <p class="font-bold text-slate-400">Summoning the champions...</p>
-        </div>
-    {:else if players.length === 0}
-        <div class="bubbly-card flex flex-col items-center justify-center py-20 text-center">
-            <span class="text-7xl mb-6">🏟️</span>
-            <h2 class="text-3xl font-black text-slate-800 mb-2">The Arena is Empty!</h2>
-            <p class="text-slate-500 font-medium mb-8">Be the first to claim a spot on the leaderboard.</p>
-            <a href="/lobby" class="btn-kid btn-pink no-underline">Start Your Journey</a>
-        </div>
-    {:else}
-        <!-- Top 3 Podium -->
-        {#if players.length >= 3}
-            <div class="flex flex-col lg:flex-row items-end justify-center gap-6 mb-20 px-4">
-                <!-- 2nd Place -->
-                <div class="flex flex-col items-center group order-2 lg:order-1">
-                    <div class="bubbly-card !p-6 border-slate-200 mb-4 group-hover:-translate-y-2 transition-transform">
-                        <div class="text-4xl mb-2 text-center">🥈</div>
-                        <div class="font-black text-slate-700 truncate w-24 text-center">{players[1].username || 'Ninja'}</div>
-                        <div class="text-2xl font-black text-slate-400 text-center">{players[1].rating}</div>
-                    </div>
-                    <div class="w-32 h-32 bg-slate-100 rounded-t-bubble-lg border-x-4 border-t-4 border-white shadow-bubble flex items-center justify-center">
-                        <span class="text-4xl font-black text-slate-300">2</span>
-                    </div>
-                </div>
-
-                <!-- 1st Place -->
-                <div class="flex flex-col items-center group order-1 lg:order-2 scale-110 z-10">
-                    <div class="text-4xl mb-2 float-anim">👑</div>
-                    <div class="bubbly-card !p-8 border-kid-yellow/50 mb-4 group-hover:-translate-y-2 transition-transform shadow-kid-glow bg-white relative">
-                        <div class="absolute -top-2 -right-2 bg-kid-yellow text-amber-700 w-8 h-8 rounded-full flex items-center justify-center font-black text-sm border-2 border-white">#1</div>
-                        <div class="text-5xl mb-2 text-center">🥇</div>
-                        <div class="font-black text-slate-800 text-xl truncate w-32 text-center">{players[0].username || 'Champion'}</div>
-                        <div class="text-3xl font-black text-kid-pink text-center">{players[0].rating}</div>
-                    </div>
-                    <div class="w-40 h-48 bg-gradient-to-b from-kid-yellow/40 to-kid-yellow/10 rounded-t-bubble-lg border-x-4 border-t-4 border-white shadow-kid-glow flex items-center justify-center">
-                        <span class="text-6xl font-black text-kid-yellow">1</span>
-                    </div>
-                </div>
-
-                <!-- 3rd Place -->
-                <div class="flex flex-col items-center group order-3">
-                    <div class="bubbly-card !p-6 border-kid-orange/30 mb-4 group-hover:-translate-y-2 transition-transform">
-                        <div class="text-4xl mb-2 text-center">🥉</div>
-                        <div class="font-black text-slate-700 truncate w-24 text-center">{players[2].username || 'Hero'}</div>
-                        <div class="text-2xl font-black text-kid-orange text-center">{players[2].rating}</div>
-                    </div>
-                    <div class="w-32 h-20 bg-kid-orange/10 rounded-t-bubble-lg border-x-4 border-t-4 border-white shadow-bubble flex items-center justify-center">
-                        <span class="text-4xl font-black text-kid-orange/30">3</span>
-                    </div>
-                </div>
+    <div class="lc-card overflow-hidden shadow-2xl fade-in" style="animation-delay: 0.1s">
+        {#if loading}
+            <div class="flex h-64 items-center justify-center">
+                <div class="h-8 w-8 border-2 border-lc-orange border-t-transparent animate-spin rounded-full"></div>
             </div>
-        {/if}
-
-        <!-- Rest of the Table -->
-        <div class="bubbly-card !p-0 overflow-hidden border-slate-100">
+        {:else if players.length === 0}
+            <div class="flex h-64 flex-col items-center justify-center text-center p-8">
+                <div class="text-3xl mb-4">🏆</div>
+                <p class="text-lc-text-secondary">No champions have emerged yet.</p>
+                <button on:click={loadLeaderboard} class="mt-4 text-xs font-bold text-lc-orange uppercase tracking-widest hover:underline">Refresh Registry</button>
+            </div>
+        {:else}
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead>
-                        <tr class="bg-slate-50">
-                            <th class="px-8 py-6 font-black text-slate-400 text-xs uppercase tracking-widest">Rank</th>
-                            <th class="px-8 py-6 font-black text-slate-400 text-xs uppercase tracking-widest">Ninja</th>
-                            <th class="px-8 py-6 font-black text-slate-400 text-xs uppercase tracking-widest text-center">Tier</th>
-                            <th class="px-8 py-6 font-black text-slate-400 text-xs uppercase tracking-widest text-right">ELO</th>
-                            <th class="px-8 py-6 font-black text-slate-400 text-xs uppercase tracking-widest text-right">W / L</th>
+                        <tr class="border-b border-lc-border bg-lc-surface-elevated/30">
+                            <th class="px-6 py-4 text-[10px] font-bold text-lc-text-muted uppercase tracking-widest">Rank</th>
+                            <th class="px-6 py-4 text-[10px] font-bold text-lc-text-muted uppercase tracking-widest">Coder</th>
+                            <th class="px-6 py-4 text-[10px] font-bold text-lc-text-muted uppercase tracking-widest text-center">ELO Rating</th>
+                            <th class="px-6 py-4 text-[10px] font-bold text-lc-text-muted uppercase tracking-widest text-center">Performance</th>
+                            <th class="px-6 py-4 text-[10px] font-bold text-lc-text-muted uppercase tracking-widest text-right">Ratio</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-lc-border">
                         {#each players as player, i}
-                            <tr class="hover:bg-kid-blue/5 transition-colors group">
-                                <td class="px-8 py-6">
-                                    <div class="w-10 h-10 rounded-full flex items-center justify-center font-black {i < 3 ? 'text-2xl' : 'bg-slate-50 text-slate-400 text-sm'}">
-                                        {getRankEmoji(i)}
+                            <tr class="group hover:bg-white/[0.02] transition-colors">
+                                <td class="px-6 py-5">
+                                    <div class="flex items-center gap-3">
+                                        {#if i === 0}
+                                            <span class="text-xl">🥇</span>
+                                        {:else if i === 1}
+                                            <span class="text-xl">🥈</span>
+                                        {:else if i === 2}
+                                            <span class="text-xl">🥉</span>
+                                        {:else}
+                                            <span class="text-sm font-mono text-lc-text-muted">#{(i + 1).toString().padStart(2, '0')}</span>
+                                        {/if}
                                     </div>
                                 </td>
-                                <td class="px-8 py-6">
-                                    <span class="font-bold text-slate-700 group-hover:text-kid-blue transition-colors text-lg">
-                                        {player.username || 'Anonymous Ninja'}
-                                    </span>
+                                <td class="px-6 py-5">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-9 w-9 rounded bg-lc-surface-elevated border border-lc-border flex items-center justify-center text-xs font-bold text-lc-orange">
+                                            {player.username?.slice(0, 1).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-bold text-lc-text-primary truncate max-w-[150px]">{player.username}</div>
+                                            <div class="text-[9px] font-bold text-lc-text-muted uppercase tracking-tighter">Contributor</div>
+                                        </div>
+                                    </div>
                                 </td>
-                                <td class="px-8 py-6 text-center">
-                                    <span class="px-4 py-1.5 rounded-full font-black text-xs uppercase tracking-tighter border-2 {getTierStyles(player.rating)}">
-                                        {getTierName(player.rating)}
-                                    </span>
-                                </td>
-                                <td class="px-8 py-6 text-right">
-                                    <span class="font-black text-xl text-slate-700 font-mono tracking-tighter">
+                                <td class="px-6 py-5 text-center">
+                                    <span class="inline-flex items-center rounded-full bg-lc-orange/10 px-3 py-1 text-xs font-bold text-lc-orange border border-lc-orange/20">
                                         {player.rating}
                                     </span>
                                 </td>
-                                <td class="px-8 py-6 text-right">
-                                    <div class="flex flex-col items-end">
-                                        <div class="font-bold text-sm">
-                                            <span class="text-kid-green">{player.wins}W</span>
-                                            <span class="mx-1 text-slate-200">|</span>
-                                            <span class="text-kid-pink">{player.losses}L</span>
+                                <td class="px-6 py-5">
+                                    <div class="mx-auto max-w-[120px]">
+                                        <div class="flex items-center justify-between text-[10px] font-bold text-lc-text-muted uppercase mb-1.5 font-mono">
+                                            <span>{player.wins}W</span>
+                                            <span>{player.losses}L</span>
                                         </div>
-                                        <div class="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-1">
-                                            {Math.round((player.wins / ((player.wins + player.losses) || 1)) * 100)}% Win Rate
+                                        <div class="flex h-1.5 w-full overflow-hidden rounded-full bg-lc-surface-elevated">
+                                            <div
+                                                class="h-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"
+                                                style="width: {(player.wins / ((player.wins + player.losses) || 1)) * 100}%"
+                                            ></div>
+                                            <div
+                                                class="h-full bg-red-500/50"
+                                                style="width: {(player.losses / ((player.wins + player.losses) || 1)) * 100}%"
+                                            ></div>
                                         </div>
                                     </div>
+                                </td>
+                                <td class="px-6 py-5 text-right">
+                                    <span class="text-sm font-bold font-mono text-lc-text-primary">
+                                        {((player.wins / ((player.wins + player.losses) || 1)) * 100).toFixed(1)}%
+                                    </span>
                                 </td>
                             </tr>
                         {/each}
                     </tbody>
                 </table>
             </div>
-        </div>
-    {/if}
-</div>
+        {/if}
+    </div>
 
-<style>
-    :global(body) {
-        background-color: #F8F9FF;
-        background-image: 
-            radial-gradient(#A3D9FF 1px, transparent 1px),
-            radial-gradient(#FFB7D5 1px, transparent 1px);
-        background-size: 80px 80px;
-        background-position: 0 0, 40px 40px;
-    }
-</style>
+    <div class="mt-8 text-center">
+        <p class="text-[10px] text-lc-text-muted uppercase tracking-[0.2em]">Rankings updated in real-time based on competitive performance</p>
+    </div>
+</div>
