@@ -1,4 +1,4 @@
-# ⚔️ 1v1 Coding Arena
+# ⚔️ LeetCode Battle
 
 Real-time competitive coding battle platform. Two players compete head-to-head solving coding challenges — first correct submission wins.
 

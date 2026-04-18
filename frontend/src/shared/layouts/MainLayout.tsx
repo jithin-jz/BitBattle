@@ -21,7 +21,7 @@ export default function MainLayout() {
           <div className="flex items-center gap-8">
             <Link to="/lobby" className="flex items-center gap-2">
               <div className="w-2 h-8 bg-lc-orange rounded-full"></div>
-              <span className="text-xl font-bold tracking-tight">CodeBattle</span>
+              <span className="text-xl font-bold tracking-tight">LeetCode Battle</span>
             </Link>
 
             <nav className="hidden md:flex items-center gap-1">
@@ -63,7 +63,7 @@ export default function MainLayout() {
         </div>
       </header>
 
-      <main className="flex-grow flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+      <main className="flex-grow flex flex-col overflow-y-auto">
         <Outlet />
       </main>
     </div>

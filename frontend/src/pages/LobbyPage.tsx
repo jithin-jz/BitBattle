@@ -14,27 +14,63 @@ export default function LobbyPage() {
   const navigate = useNavigate();
   const ws = useRef<WebSocket | null>(null);
 
-  useEffect(() => {
-    const WS_URL = import.meta.env.VITE_PUBLIC_WS_URL || 'ws://localhost:8000';
-    const socket = new WebSocket(`${WS_URL}/ws/lobby${accessToken ? '?token=' + accessToken : ''}`);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | 'disconnected'>('connecting');
 
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'online_count') {
-        setOnlineCount(data.count);
-      } else if (data.type === 'match_found') {
-        dispatch(setMatchData({
-          matchId: data.match_id,
-          status: 'matched',
-          opponentId: data.player1_id === user?.id ? data.player2_id : data.player1_id
-        }));
-        navigate(`/battle/${data.match_id}`);
-      }
+  useEffect(() => {
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: any;
+
+    const connect = () => {
+      if (socket) socket.close();
+      
+      const WS_URL = import.meta.env.VITE_PUBLIC_WS_URL || 'ws://localhost:8000';
+      const url = `${WS_URL}/ws/lobby${accessToken ? '?token=' + accessToken : ''}`;
+      
+      socket = new WebSocket(url);
+      setConnectionStatus('connecting');
+
+      socket.onopen = () => {
+        setConnectionStatus('connected');
+        console.log('Lobby WS connected');
+      };
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'online_count') {
+          setOnlineCount(data.count);
+        } else if (data.type === 'match_found') {
+          console.log('Match found event received:', data);
+          dispatch(setMatchData({
+            matchId: data.match_id,
+            status: 'matched',
+            opponentId: data.player1_id === user?.id ? data.player2_id : data.player1_id
+          }));
+          setSearching(false);
+          navigate(`/battle/${data.match_id}`);
+        }
+      };
+
+      socket.onerror = (err) => {
+        console.error('Lobby WS error:', err);
+        setConnectionStatus('error');
+      };
+
+      socket.onclose = () => {
+        setConnectionStatus('disconnected');
+        console.log('Lobby WS disconnected, retrying in 3s...');
+        reconnectTimeout = setTimeout(connect, 3000);
+      };
+
+      ws.current = socket;
     };
 
-    ws.current = socket;
-    return () => socket.close();
-  }, [accessToken, user, dispatch, navigate]);
+    connect();
+
+    return () => {
+      if (socket) socket.close();
+      clearTimeout(reconnectTimeout);
+    };
+  }, [accessToken, user?.id, dispatch, navigate]);
 
   useEffect(() => {
     let interval: any;
@@ -94,7 +130,7 @@ export default function LobbyPage() {
 
             <h2 className="text-3xl font-bold text-lc-text-primary mb-3 tracking-tight">Ready for Combat?</h2>
             <p className="text-lc-text-secondary max-w-md mb-10 text-sm leading-relaxed">
-              Step into the digital arena. Face off against elite coders in high-stakes algorithmic duels.
+              Step into the LeetCode Battleground. Face off against elite coders in high-stakes algorithmic duels.
             </p>
 
             <div className="w-full max-w-xs space-y-4">
@@ -138,7 +174,7 @@ export default function LobbyPage() {
 
         <div className="space-y-6">
           <div className="lc-card p-6">
-            <h3 className="text-xs font-bold text-lc-text-muted uppercase tracking-widest mb-6">Arena Status</h3>
+            <h3 className="text-xs font-bold text-lc-text-muted uppercase tracking-widest mb-6">Battle Status</h3>
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-lc-text-secondary">Global Rank</span>
@@ -151,9 +187,19 @@ export default function LobbyPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between">
+                <span className="text-xs text-lc-text-secondary">Gateway</span>
+                <div className="flex items-center gap-2">
+                  <span className={`flex h-1.5 w-1.5 rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-green-500' : 
+                    connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+                  }`}></span>
+                  <span className="text-xs font-bold text-lc-text-primary capitalize">{connectionStatus}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-xs text-lc-text-secondary">Coders Online</span>
                 <div className="flex items-center gap-2">
-                  <span className="flex h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  <span className="flex h-1.5 w-1.5 rounded-full bg-green-500/50"></span>
                   <span className="text-xs font-bold text-lc-text-primary">{onlineCount} connected</span>
                 </div>
               </div>

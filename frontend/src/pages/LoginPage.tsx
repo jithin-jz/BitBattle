@@ -141,7 +141,7 @@ export default function LoginPage() {
                       disabled={loading || otp.length < 6}
                       className="flex-[2] lc-button-primary text-xs uppercase"
                     >
-                      {loading ? 'Validating...' : 'Unlock Arena'}
+                      {loading ? 'Validating...' : 'Unlock Battle'}
                     </button>
                   </div>
                 </div>

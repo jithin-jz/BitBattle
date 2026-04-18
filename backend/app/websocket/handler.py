@@ -46,7 +46,7 @@ class LobbyManager:
     async def broadcast(self, message: dict):
         """Broadcast message to everyone in the lobby."""
         disconnected = []
-        for ws in self.active_connections:
+        for ws in list(self.active_connections):
             try:
                 await ws.send_json(message)
             except Exception:
@@ -260,12 +260,30 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
                     await load_match_start_payload(db_session, match_id)
                 )
 
+        # Get username for notification
+        username = "Unknown"
+        async with async_session_factory() as db_session:
+            from app.models.user import User
+            result = await db_session.execute(select(User).where(User.id == user_id))
+            usr = result.scalar_one_or_none()
+            if usr:
+                username = usr.username
+
         # Notify match about new connection
         await manager.send_to_match(match_id, {
             "type": "player_connected",
             "user_id": user_id,
+            "username": username,
             "connected_count": manager.get_connected_count(match_id),
         })
+        
+        # If the other player is already connected, notify this player about them
+        others = [uid for uid in manager.active_connections.get(match_id, {}) if uid != user_id]
+        for other_id in others:
+            # We don't easily have their username here without another DB lookup, 
+            # but they will send their own player_connected if they are still active.
+            # Actually, let's just send the match usernames which we already have.
+            pass
 
         # Auto-start logic
         if manager.get_connected_count(match_id) == 2 and not match_is_already_started:
@@ -292,12 +310,68 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
                     "user_id": user_id,
                     "status": data.get("status", "attempted"),
                 })
+            elif msg_type == "submit":
+                code = data.get("code", "")
+                passed = data.get("passed", False)
+                
+                async with async_session_factory() as db:
+                    try:
+                        submission = await MatchService.submit_solution(
+                            db, match_id, user_id, code, passed
+                        )
+                        await db.commit()
+                        logger.info(f"Match {match_id} submitted by {user_id}. Passed: {passed}")
+                    except ValueError as e:
+                        logger.warning(f"Submission rejected: {e}")
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": str(e)
+                        })
             elif msg_type == "code_update":
                 # Find opponent
                 opponent_id = player2_id if user_id == player1_id else player1_id
                 await manager.send_to_user(match_id, opponent_id, {
                     "type": "opponent_typing",
                     "user_id": user_id,
+                })
+            elif msg_type == "rematch_request":
+                # Loser requesting revenge
+                opponent_id = player2_id if user_id == player1_id else player1_id
+                await manager.send_to_user(match_id, opponent_id, {
+                    "type": "rematch_proposal",
+                    "from_id": user_id,
+                })
+            elif msg_type == "rematch_accept":
+                # Winner accepted
+                opponent_id = player2_id if user_id == player1_id else player1_id
+                async with async_session_factory() as db:
+                    # Determine a random problem
+                    from app.models.problem import Problem
+                    problems_result = await db.execute(select(Problem))
+                    problems = problems_result.scalars().all()
+                    import random
+                    problem = random.choice(problems)
+                    
+                    # Create new match
+                    new_match = Match(
+                        player1_id=user_id,
+                        player2_id=opponent_id,
+                        problem_id=problem.id,
+                        status="WAITING"
+                    )
+                    db.add(new_match)
+                    await db.commit()
+                    await db.refresh(new_match)
+                    
+                    # Redirect both
+                    await manager.send_to_match(match_id, {
+                        "type": "rematch_started",
+                        "new_match_id": new_match.id
+                    })
+            elif msg_type == "rematch_decline":
+                opponent_id = player2_id if user_id == player1_id else player1_id
+                await manager.send_to_user(match_id, opponent_id, {
+                    "type": "rematch_denied"
                 })
 
     except WebSocketDisconnect:
@@ -306,6 +380,18 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
         logger.error(f"WS error: {e}")
     finally:
         redis_task.cancel()
+        
+        # Check if match was active and other player still here -> Forfeit
+        # Use a new session to avoid issues with the closed loop
+        async with async_session_factory() as db:
+            match = await MatchService.get_match(db, match_id)
+            if match and match.status == "STARTED":
+                # If we were 2 and now 1 is leaving, the other wins
+                count = manager.get_connected_count(match_id)
+                if count >= 2: # We are still in the connections during this finally block
+                    await MatchService.forfeit_match(db, match_id, user_id)
+                    await db.commit()
+
         removed = manager.disconnect(match_id, user_id, websocket)
         if removed:
             await manager.send_to_match(match_id, {
@@ -316,18 +402,23 @@ async def handle_match_websocket(websocket: WebSocket, match_id: str, token: str
 
 async def handle_lobby_websocket(websocket: WebSocket, token: str = None):
     """WebSocket handler for global updates (leaderboard/lobby) and user notifications."""
+    
+    # Accept the websocket connection FIRST
+    await lobby_manager.connect(websocket)
+
+    # Ensure token is extracted correctly if not passed by FastAPI dependency
+    if not token:
+        token = websocket.query_params.get("token")
+        
     user_id = None
     if token:
         try:
-            from app.core.security import decode_token
             payload = decode_token(token)
             user_id = payload.get("sub")
-        except Exception:
-            logger.warning("Invalid token in lobby WS")
+            logger.info(f"Lobby WS authenticated: user={user_id}")
+        except Exception as e:
+            logger.warning(f"Invalid token in lobby WS: {e}")
 
-    await lobby_manager.connect(websocket)
-    
-    from app.core.redis import get_redis
     redis_client = await get_redis()
     pubsub = redis_client.pubsub()
     
@@ -335,6 +426,9 @@ async def handle_lobby_websocket(websocket: WebSocket, token: str = None):
     channels = ["global:lobby"]
     if user_id:
         channels.append(f"user:{user_id}")
+        logger.info(f"Subscribing lobby WS to channels: {channels}")
+    else:
+        logger.info("Lobby WS connected anonymously (no user_id)")
     
     await pubsub.subscribe(*channels)
 
@@ -355,11 +449,7 @@ async def handle_lobby_websocket(websocket: WebSocket, token: str = None):
 
     redis_task = asyncio.create_task(redis_listener())
 
-    # Send current online count immediately
-    await websocket.send_json({
-        "type": "online_count",
-        "count": len(lobby_manager.active_connections)
-    })
+    # Send current online count is already handled by lobby_manager.connect()
 
     try:
         while True:

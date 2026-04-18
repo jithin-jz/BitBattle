@@ -133,9 +133,17 @@ class MatchService:
                 f"Loser: {loser.rating} → {new_loser_rating}"
             )
 
-            # Notify global lobby/leaderboard
             import json
             redis = await get_redis()
+            
+            # Notify match channel
+            await redis.publish(f"match:{match_id}", json.dumps({
+                "type": "match_end",
+                "match_id": match_id,
+                "winner_id": user_id
+            }))
+
+            # Notify global lobby/leaderboard
             await redis.publish("global:lobby", json.dumps({
                 "type": "leaderboard_update",
                 "match_id": match_id,
@@ -147,25 +155,55 @@ class MatchService:
         return submission
 
     @staticmethod
-    async def end_match_timeout(db: AsyncSession, match_id: str) -> Match:
-        """End match due to timeout (draw)."""
-        result = await db.execute(select(Match).where(Match.id == match_id))
+    async def forfeit_match(db: AsyncSession, match_id: str, forfeiter_user_id: str) -> Match:
+        """End match due to user leaving. Remaining user wins."""
+        result = await db.execute(
+            select(Match)
+            .options(joinedload(Match.player1), joinedload(Match.player2))
+            .where(Match.id == match_id)
+        )
         match = result.scalar_one_or_none()
+        
         if match and match.status == "STARTED":
+            winner_id = match.player2_id if forfeiter_user_id == match.player1_id else match.player1_id
+            
+            match.winner_id = winner_id
             match.status = "FINISHED"
             match.ended_at = datetime.now(timezone.utc)
-            await db.flush()
 
-            # Notify global lobby
+            # Update ELO
+            winner_result = await db.execute(select(User).where(User.id == winner_id))
+            loser_result = await db.execute(select(User).where(User.id == forfeiter_user_id))
+            winner = winner_result.scalar_one()
+            loser = loser_result.scalar_one()
+
+            new_winner_rating, new_loser_rating = ELOService.calculate_elo(winner.rating, loser.rating)
+            winner.rating = new_winner_rating
+            winner.wins += 1
+            loser.rating = new_loser_rating
+            loser.losses += 1
+
+            await db.flush()
+            
+            # Notify via pub/sub
             import json
             redis = await get_redis()
+            await redis.publish(f"match:{match_id}", json.dumps({
+                "type": "match_end",
+                "match_id": match_id,
+                "winner_id": winner_id,
+                "reason": "forfeit"
+            }))
+
             await redis.publish("global:lobby", json.dumps({
                 "type": "leaderboard_update",
                 "match_id": match_id,
-                "reason": "timeout"
+                "winner_id": winner_id,
+                "reason": "forfeit"
             }))
-        return match
-
+            
+            return match
+        return None
 
     @staticmethod
     async def get_match(db: AsyncSession, match_id: str) -> Match:

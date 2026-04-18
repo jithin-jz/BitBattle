@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application startup/shutdown lifecycle."""
     # Startup
-    logger.info("🚀 Starting Arena Backend...")
+    logger.info("🚀 Starting LeetCode Battle Backend...")
 
     # Create tables (for development; use Alembic in production)
     async with engine.begin() as conn:
@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     await close_redis()
     await engine.dispose()
-    logger.info("👋 Arena Backend shut down")
+    logger.info("👋 LeetCode Battle Backend shut down")
 
 
 async def seed_problems():
@@ -102,7 +102,6 @@ async def seed_problems():
                 {
                     "title": "FizzBuzz",
                     "description": (
-                        "Given an integer n, return a string array where:\n"
                         "- `answer[i] == \"FizzBuzz\"` if i is divisible by 3 and 5\n"
                         "- `answer[i] == \"Fizz\"` if i is divisible by 3\n"
                         "- `answer[i] == \"Buzz\"` if i is divisible by 5\n"
@@ -183,7 +182,7 @@ async def seed_problems():
 
 
 app = FastAPI(
-    title="1v1 Coding Arena",
+    title="LeetCode Battle",
     description="Real-time competitive coding battle platform",
     version="1.0.0",
     lifespan=lifespan,
@@ -204,14 +203,21 @@ app.include_router(problems_router)
 app.include_router(match_router)
 
 
-# WebSocket endpoint
+# WebSocket endpoints
 @app.websocket("/ws/match/{match_id}")
-async def match_websocket(websocket: WebSocket, match_id: str, token: str):
+async def match_websocket(
+    websocket: WebSocket, 
+    match_id: str, 
+    token: str = Query(None)
+):
     await handle_match_websocket(websocket, match_id, token)
 
 
 @app.websocket("/ws/lobby")
-async def lobby_websocket(websocket: WebSocket, token: str = None):
+async def lobby_websocket(
+    websocket: WebSocket, 
+    token: str = Query(None)
+):
     await handle_lobby_websocket(websocket, token)
 
 
@@ -219,6 +225,6 @@ async def lobby_websocket(websocket: WebSocket, token: str = None):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "arena-backend"}
+    return {"status": "healthy", "service": "leetcode-battle-backend"}
 
 # Trigger reload

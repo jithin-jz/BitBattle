@@ -4,6 +4,7 @@ import { MatchState, OpponentStatus } from '../../shared/types';
 interface BattleState {
   data: MatchState;
   opponentStatus: OpponentStatus;
+  playerStatuses: Record<string, { username: string; connected: boolean }>;
 }
 
 const initialState: BattleState = {
@@ -20,6 +21,7 @@ const initialState: BattleState = {
     player2Username: null,
   },
   opponentStatus: 'waiting',
+  playerStatuses: {},
 };
 
 export const battleSlice = createSlice({
@@ -35,12 +37,19 @@ export const battleSlice = createSlice({
     setOpponentStatus: (state, action: PayloadAction<OpponentStatus>) => {
       state.opponentStatus = action.payload;
     },
+    setPlayerConnection: (state, action: PayloadAction<{ userId: string; username: string; connected: boolean }>) => {
+      state.playerStatuses[action.payload.userId] = {
+        username: action.payload.username,
+        connected: action.payload.connected,
+      };
+    },
     resetBattle: (state) => {
       state.data = initialState.data;
       state.opponentStatus = 'waiting';
+      state.playerStatuses = {};
     },
   },
 });
 
-export const { setMatchData, updateTimer, setOpponentStatus, resetBattle } = battleSlice.actions;
+export const { setMatchData, updateTimer, setOpponentStatus, resetBattle, setPlayerConnection } = battleSlice.actions;
 export default battleSlice.reducer;

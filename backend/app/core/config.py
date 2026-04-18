@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "super-secret-key-change-in-production-2024"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440 # 24 hours
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # GitHub OAuth
@@ -36,7 +36,8 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = ""
-    SMTP_FROM_NAME: str = "1v1 Coding Arena"
+    # Use leetcode battle name
+    SMTP_FROM_NAME: str = "LeetCode Battle"
     SMTP_USE_TLS: bool = True
 
     # ELO
