@@ -220,3 +220,5 @@ async def lobby_websocket(websocket: WebSocket, token: str = None):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "arena-backend"}
+
+# Trigger reload
